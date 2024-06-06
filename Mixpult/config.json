@@ -1,0 +1,14 @@
+{
+  "sliders": [
+    "!master",
+    "mixline",
+    [
+      "worldoftanks",
+      "msedge"
+    ],
+    "discord",
+    "!other"
+  ],
+
+  "port": "COM10"
+}
