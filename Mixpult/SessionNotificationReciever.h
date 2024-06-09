@@ -1,10 +1,13 @@
 #pragma once
 
 #include <audiopolicy.h>
+#include <functional>
+
+//FIXME: Doesnt work idk
 
 class SessionNotificationReciever : public IAudioSessionNotification {
 public:
-  SessionNotificationReciever() : _cRefAll(1) {};
+  SessionNotificationReciever(std::function<HRESULT(IAudioSessionControl*)> cb) : _cRefAll(1), _callback(cb) {};
 
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvInterface) {
     if (IID_IUnknown == riid) {
@@ -32,15 +35,14 @@ public:
     return ulRef;
   }
 
-  HRESULT OnSessionCreated(IAudioSessionControl* pNewSession)
-  {
-    if (pNewSession) {
-    }
+  HRESULT OnSessionCreated(IAudioSessionControl* pNewSession) {
+    return _callback(pNewSession);
   }
 
-private:
   ~SessionNotificationReciever() {};
+private:
 
   LONG _cRefAll;
+  std::function<HRESULT(IAudioSessionControl*)> _callback;
 };
 

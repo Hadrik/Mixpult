@@ -1,6 +1,3 @@
-#ifndef AUDIOCONTROLLER_H
-#define AUDIOCONTROLLER_H
-
 #pragma once
 
 #include <windows.h>
@@ -15,7 +12,7 @@
 #include <vector>
 #include <map>
 #include <set>
-//#include "SessionNotificationReciever.h"
+#include "SessionNotificationReciever.h"
 #using <System.dll>
 
 #include <iostream>
@@ -48,12 +45,18 @@ public:
 	static float getMasterVolume();
 
 private:
-  static bool _getSessionControlByName(std::string name, std::vector<CComPtr<IAudioSessionControl>> &ascs);
+	static HRESULT _onNewSession(IAudioSessionControl* ac);
+	static bool _createNewSession(CComPtr<IAudioSessionControl> asc);
 
-	//static SessionNotificationReciever _notif_reciever;
+	struct Controls {
+		CComPtr<IAudioSessionControl> audioSessionControl;
+		CComPtr<IAudioSessionControl2> audioSessionControl2;
+		CComPtr<ISimpleAudioVolume> simpleAudioVolume;
+	};
+	static std::map<std::string, std::vector<Controls>> _sessions;
+
+	static SessionNotificationReciever _notif_reciever;
 	static CComPtr<IAudioEndpointVolume> _pEpVol;
 	static CComPtr<IAudioSessionEnumerator> _pAudioSessionEnumerator;
 	static HANDLE _hSerial;
 };
-
-#endif
