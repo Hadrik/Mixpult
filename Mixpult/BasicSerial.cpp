@@ -12,29 +12,26 @@ BasicSerial::~BasicSerial() {
 }
 
 bool BasicSerial::open(std::string port) {
+retry:
   const std::string start = "\\\\.\\";
   if (port.rfind(start, 0) != 0) {
     port.insert(0, start);
   }
 
-  _serial_handle =
-    CreateFileA(port.c_str(), GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0);
+  _serial_handle = CreateFileA(port.c_str(), GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0);
 
   if (_serial_handle == INVALID_HANDLE_VALUE) {
     if (GetLastError() == ERROR_FILE_NOT_FOUND) {
-      std::cerr << "Serial port not found!" << std::endl;
-      return false;
+      MESSAGE_ERR_RETRY("Serial port not found!", retry);
     }
-    std::cerr << "Cannot open serial port!" << std::endl;
-    return false;
+    MESSAGE_ERR_RETRY("Cannot open serial port!", retry);
   }
 
   DCB dcb_params;
   dcb_params.DCBlength = sizeof(dcb_params);
 
   if (!GetCommState(_serial_handle, &dcb_params)) {
-    std::cerr << "Some other serial error!" << std::endl;
-    return false;
+    MESSAGE_ERR_RETRY("Serial error!", retry);
   }
 
   dcb_params.BaudRate = 9600;
@@ -44,8 +41,7 @@ bool BasicSerial::open(std::string port) {
   dcb_params.StopBits = 1;
 
   if (!GetCommState(_serial_handle, &dcb_params)) {
-    std::cerr << "Error setting serial parameters!" << std::endl;
-    return false;
+    MESSAGE_ERR_RETRY("Error setting serial parameters!", retry);
   }
 
   return true;
@@ -68,6 +64,7 @@ std::string BasicSerial::getLastCommand() {
   return _last_command;
 }
 
+// VERY hacky and slow, dont look :3
 bool BasicSerial::update() {
   _timeouts.ReadTotalTimeoutConstant = 50;
   DWORD bytes_read;
@@ -124,9 +121,8 @@ bool BasicSerial::update() {
 }
 
 int BasicSerial::avaliable() {
-  DWORD comm_errors;
   COMSTAT comm_status;
-  ClearCommError(_serial_handle, &comm_errors, &comm_status);
+  ClearCommError(_serial_handle, NULL, &comm_status);
   return comm_status.cbInQue;
 }
 

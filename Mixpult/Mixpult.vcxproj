@@ -158,8 +158,10 @@
     <ClInclude Include="BasicSerial.h" />
     <ClInclude Include="ConfigLoader.h" />
     <ClInclude Include="MasterController.h" />
+    <ClInclude Include="MessageBoxes.h" />
     <ClInclude Include="OtherController.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="SessionNotificationReciever.h" />
     <ClInclude Include="SliderController.h" />
   </ItemGroup>
   <ItemGroup>

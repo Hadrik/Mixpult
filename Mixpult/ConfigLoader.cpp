@@ -3,25 +3,24 @@
 using json = nlohmann::json;
 
 Config_t ConfigLoader::load(std::string path) {
+retry:
   std::ifstream f(path);
   if (!f) {
-    MessageBoxA(nullptr, "Cannot find configuration file!", "Mixpult", MB_OK | MB_ICONERROR);
-    throw;
+    MESSAGE_ERR_RETRY("Cannot find configuration file!", retry);
   }
+
   json j;
   try {
     j = json::parse(f);
   } catch (...) {
-    MessageBoxA(nullptr, "Bad configuration file formatting!", "Mixpult", MB_OK | MB_ICONERROR);
-    throw;
+    MESSAGE_ERR_RETRY("Bad configuration file formatting!", retry);
   }
 
   Config_t c;
   try {
     j.at("port").get_to(c.port);
   } catch (...) {
-    MessageBoxA(nullptr, "Configuration file bad \"port\" option!", "Mixpult", MB_OK | MB_ICONERROR);
-    throw;
+    MESSAGE_ERR_RETRY("Configuration file bad \"port\" option!", retry);
   }
 
   try {
@@ -43,8 +42,7 @@ Config_t ConfigLoader::load(std::string path) {
     }
   }
   catch (...) {
-    MessageBoxA(nullptr, "Configuration file bad \"sliders\" option!", "Mixpult", MB_OK | MB_ICONERROR);
-    throw;
+    MESSAGE_ERR_RETRY("Configuration file bad \"sliders\" option!", retry);
   }
 
   return c;

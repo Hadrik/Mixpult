@@ -1,6 +1,3 @@
-#ifndef BASICSERIAL_H
-#define BASICSERIAL_H
-
 #pragma once
 
 #include <Windows.h>
@@ -11,6 +8,7 @@
 #include <sstream>
 #include <functional>
 #include <algorithm>
+#include "MessageBoxes.h"
 
 class BasicSerial {
 public:
@@ -33,5 +31,3 @@ private:
 
   bool readChar(char*);
 };
-
-#endif

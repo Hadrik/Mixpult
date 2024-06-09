@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include "MessageBoxes.h"
 
 struct Config_t {
   std::string port;

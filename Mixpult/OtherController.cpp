@@ -4,25 +4,29 @@ bool OtherController::setVolume(float vol) {
   if (_mute) {
     setMute(false);
   }
+
+  auto names = AudioController::getAllSessions();
   bool err = false;
-  for (auto& line : SliderController::_map) {
-    if (SliderController::_used.find(line.first) != SliderController::_used.end()) {
+
+  for (auto& name : names) {
+    if (SliderController::_used.find(name) != SliderController::_used.end()) {
       continue; // This element is used
     }
 
-    if (!AudioController::setSessionVolume(line.second, vol)) err = true;;
+    if (!AudioController::setSessionVolume(name, vol)) err = true;
   }
   return err;
 }
 
 bool OtherController::setMute(bool mute) {
+  auto names = AudioController::getAllSessions();
   bool err = false;
-  for (auto& line : SliderController::_map) {
-    if (SliderController::_used.find(line.first) != SliderController::_used.end()) {
+  for (auto& name : names) {
+    if (SliderController::_used.find(name) != SliderController::_used.end()) {
       continue; // This element is used
     }
 
-    if (!AudioController::setSessionMute(line.second, mute)) err = true;
+    if (!AudioController::setSessionMute(name, mute)) err = true;
   }
 
   // Did anything get (un)muted? Sets _mute
@@ -31,13 +35,14 @@ bool OtherController::setMute(bool mute) {
 }
 
 bool OtherController::getMute() {
+  auto names = AudioController::getAllSessions();
   bool m_any = false;
-  for (auto& line : SliderController::_map) {
-    if (SliderController::_used.find(line.first) != SliderController::_used.end()) {
+  for (auto& name : names) {
+    if (SliderController::_used.find(name) != SliderController::_used.end()) {
       continue; // This element is used
     }
 
-    if (AudioController::getSessionMute(line.second)) m_any = true;
+    if (AudioController::getSessionMute(name)) m_any = true;
   }
   _mute = m_any;
   return m_any;

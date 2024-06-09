@@ -14,12 +14,11 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
+//#include "SessionNotificationReciever.h"
 #using <System.dll>
 
 #include <iostream>
-
-using SessionID_t = int;
-using NameIDMap_t = std::map<std::string, std::vector<SessionID_t>>;
 
 class AudioController {
 public:
@@ -28,30 +27,30 @@ public:
 
 	// Names
 	static int getSessionCount();
-	static std::string getSessionName(SessionID_t id);
-	static std::string getSessionTitle(SessionID_t id);
-	static DWORD getSessionPID(SessionID_t id);
 	static std::string getPIDName(DWORD pid);
 	static std::string getPIDTitle(DWORD pid);
-	static NameIDMap_t getNameIDMap();
+	static std::set<std::string> getAllSessions();
 
 	// Mute
-	static bool setSessionMute(SessionID_t id, bool mute);
-	static bool setSessionMute(std::vector<SessionID_t> ids, bool mute);
+	static bool setSessionMute(std::string name, bool mute);
+	static bool setSessionMute(std::vector<std::string> names, bool mute);
 	static bool setMasterMute(bool mute);
-	static bool getSessionMute(SessionID_t id);
-	static bool getSessionMute(std::vector<SessionID_t> ids);
+	static bool getSessionMute(std::string name);
+	static bool getSessionMute(std::vector<std::string> names);
 	static bool getMasterMute();
 
 	// Volume
-	static bool setSessionVolume(SessionID_t id, float vol);
-	static bool setSessionVolume(std::vector<SessionID_t> ids, float vol);
+	static bool setSessionVolume(std::string name, float vol);
+	static bool setSessionVolume(std::vector<std::string> names, float vol);
 	static bool setMasterVolume(float vol);
-	static float getSessionVolume(SessionID_t id);
-	static float getSessionVolume(std::vector<SessionID_t> ids);
+	static float getSessionVolume(std::string name);
+	static float getSessionVolume(std::vector<std::string> names);
 	static float getMasterVolume();
 
 private:
+  static bool _getSessionControlByName(std::string name, std::vector<CComPtr<IAudioSessionControl>> &ascs);
+
+	//static SessionNotificationReciever _notif_reciever;
 	static CComPtr<IAudioEndpointVolume> _pEpVol;
 	static CComPtr<IAudioSessionEnumerator> _pAudioSessionEnumerator;
 	static HANDLE _hSerial;

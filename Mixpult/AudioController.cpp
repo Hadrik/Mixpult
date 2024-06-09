@@ -36,43 +36,6 @@ int AudioController::getSessionCount() {
 	return sessionCount;
 }
 
-std::string AudioController::getSessionName(SessionID_t id){
-	if (id == -1)
-		return "master";
-	DWORD pid = getSessionPID(id);
-
-	return AudioController::getPIDName(pid);
-}
-
-std::string AudioController::getSessionTitle(SessionID_t id) {
-	if (id == -1)
-		return "master";
-	DWORD pid = getSessionPID(id);
-
-	return AudioController::getPIDTitle(pid);
-}
-
-DWORD AudioController::getSessionPID(SessionID_t id) {
-	CComPtr<IAudioSessionControl> pSessionControl;
-	CComPtr<IAudioSessionControl2> pSC2;
-	int sessionCount = getSessionCount();
-	if (id >= sessionCount || id < 0) {
-		return NULL;
-	}
-	// Get SessionControl
-	if (FAILED(AudioController::_pAudioSessionEnumerator->GetSession(id, &pSessionControl))) {
-		return NULL;
-	}
-	// audio session 2 for extended name info
-	if (FAILED(pSessionControl->QueryInterface(__uuidof(IAudioSessionControl2), (VOID**)&pSC2))) {
-		return NULL;
-	}
-
-	DWORD procid;
-	pSC2->GetProcessId(&procid);
-	return procid;
-}
-
 std::string AudioController::getPIDName(DWORD pid) {
 	String^ procname;
 
@@ -101,48 +64,65 @@ std::string AudioController::getPIDTitle(DWORD pid) {
 	return msclr::interop::marshal_as<std::string>(title);
 }
 
-NameIDMap_t AudioController::getNameIDMap() {
-	const int count = AudioController::getSessionCount();
-	NameIDMap_t map;
-	for (int i = 0; i < count; i++) {
-		std::string name = AudioController::getPIDName(AudioController::getSessionPID(i));
-		std::transform(name.begin(), name.end(), name.begin(), ::towlower);
+std::set<std::string> AudioController::getAllSessions() {
+	std::set<std::string> names;
+	CComPtr<IAudioSessionControl> s;
+	CComPtr<IAudioSessionControl2> s2;
+	int count = getSessionCount();
 
-		auto mit = map.find(name);
-		if (mit != map.end()) {
-			mit->second.push_back(i);
-		} else {
-			map.insert({ name, std::vector<SessionID_t>({i}) });
+	for (int i = 0; i < count; i++) {
+		if (FAILED(_pAudioSessionEnumerator->GetSession(i, &s))) {
+			continue;
 		}
+
+		if (FAILED(s->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&s2))) {
+			continue;
+		}
+
+		DWORD pid;
+		if (FAILED(s2->GetProcessId(&pid))) {
+			continue;
+		}
+
+		std::string process_name = AudioController::getPIDName(pid);
+		std::transform(process_name.begin(), process_name.end(), process_name.begin(), ::towlower);
+		names.insert(process_name);
+		s.Release();
+		s2.Release();
 	}
-	return map;
+
+	return names;
 }
 
-bool AudioController::setSessionMute(SessionID_t id, bool mute) {
-	int sessionCount = getSessionCount();
-	if (id == -1)
-		return setMasterMute(mute);
-	if (id >= sessionCount || id < 0) {
-		return false;
-	}
-	CComPtr<IAudioSessionControl> pSessionControl;
+bool AudioController::setSessionMute(std::string name, bool mute) {
+	std::vector<CComPtr<IAudioSessionControl>> pSessionControl;
 	CComPtr<ISimpleAudioVolume> pSAV;
 	// Get SessionControl
-	if (FAILED(AudioController::_pAudioSessionEnumerator->GetSession(id, &pSessionControl))) {
-		return false;
-	}
-	// Ask for SimpleAudioVolume
-	if (FAILED(pSessionControl->QueryInterface(__uuidof(ISimpleAudioVolume), (VOID**)&pSAV))) {
+	if (!AudioController::_getSessionControlByName(name, pSessionControl)) {
 		return false;
 	}
 
-	return S_OK == pSAV->SetMute(mute, NULL);
+	bool ok = true;
+	for (auto& sc : pSessionControl) {
+		// Ask for SimpleAudioVolume
+		if (FAILED(sc->QueryInterface(__uuidof(ISimpleAudioVolume), (VOID**)&pSAV))) {
+			return false;
+		}
+
+		HRESULT s;
+		s = pSAV->SetMute(mute, NULL);
+		ok &= (s == S_OK);
+		sc.Release();
+		pSAV.Release();
+	}
+
+	return ok;
 }
 
-bool AudioController::setSessionMute(std::vector<SessionID_t> ids, bool mute) {
+bool AudioController::setSessionMute(std::vector<std::string> names, bool mute) {
 	bool ok = true;
-	for (const auto& id : ids) {
-		ok *= AudioController::setSessionMute(id, mute);
+	for (const auto& name : names) {
+		ok &= AudioController::setSessionMute(name, mute);
 	}
 	return ok;
 }
@@ -151,32 +131,35 @@ bool AudioController::setMasterMute(bool mute) {
 	return S_OK == AudioController::_pEpVol->SetMute(mute, NULL);
 }
 
-bool AudioController::getSessionMute(SessionID_t id) {
-	int sessionCount = getSessionCount();
-	if (id == -1)
-		return getMasterMute();
-	if (id >= sessionCount || id < 0) {
-		return false;
-	}
-	CComPtr<IAudioSessionControl> pSessionControl;
+bool AudioController::getSessionMute(std::string name) {
+	std::vector<CComPtr<IAudioSessionControl>> pSessionControl;
 	CComPtr<ISimpleAudioVolume> pSAV;
 	// Get SessionControl
-	if (FAILED(AudioController::_pAudioSessionEnumerator->GetSession(id, &pSessionControl))) {
+	if (!AudioController::_getSessionControlByName(name, pSessionControl)) {
 		return false;
 	}
-	// Ask for SimpleAudioVolume
-	if (FAILED(pSessionControl->QueryInterface(__uuidof(ISimpleAudioVolume), (VOID**)&pSAV))) {
-		return false;
+
+	bool mute = true;
+	for (auto& sc : pSessionControl) {
+		// Ask for SimpleAudioVolume
+		if (FAILED(sc->QueryInterface(__uuidof(ISimpleAudioVolume), (VOID**)&pSAV))) {
+			return false;
+		}
+
+		BOOL m;
+		pSAV->GetMute(&m);
+		mute &= (bool)m;
+		sc.Release();
+		pSAV.Release();
 	}
-	BOOL mute;
-	pSAV->GetMute(&mute);
-	return mute != 0;
+
+	return mute;
 }
 
-bool AudioController::getSessionMute(std::vector<SessionID_t> ids) {
+bool AudioController::getSessionMute(std::vector<std::string> names) {
 	bool mute = false;
-	for (const auto& id : ids) {
-		mute |= AudioController::getSessionMute(id);
+	for (const auto& name : names) {
+		mute |= AudioController::getSessionMute(name);
 	}
 	return mute;
 }
@@ -187,31 +170,35 @@ bool AudioController::getMasterMute() {
 	return mute != 0;
 }
 
-bool AudioController::setSessionVolume(SessionID_t id, float vol) {
-	int sessionCount = getSessionCount();
-	if (id == -1)
-		return setMasterVolume(vol);
-	if (id >= sessionCount || id < 0) {
-		return false;
-	}
-	CComPtr<IAudioSessionControl> pSessionControl;
+bool AudioController::setSessionVolume(std::string name, float vol) {
+	std::vector<CComPtr<IAudioSessionControl>> pSessionControl;
 	CComPtr<ISimpleAudioVolume> pSAV;
 	// Get SessionControl
-	if (FAILED(AudioController::_pAudioSessionEnumerator->GetSession(id, &pSessionControl))) {
-		return false;
-	}
-	// Ask for SimpleAudioVolume
-	if (FAILED(pSessionControl->QueryInterface(__uuidof(ISimpleAudioVolume), (VOID**)&pSAV))) {
+	if (!AudioController::_getSessionControlByName(name, pSessionControl)) {
 		return false;
 	}
 
-	return S_OK == pSAV->SetMasterVolume(vol, NULL);
+	bool hr = true;
+	for (auto& sc : pSessionControl) {
+		// Ask for SimpleAudioVolume
+		if (FAILED(sc->QueryInterface(__uuidof(ISimpleAudioVolume), (VOID**)&pSAV))) {
+			return false;
+		}
+
+		HRESULT s;
+		s = pSAV->SetMasterVolume(vol, NULL);
+		hr &= (s == S_OK);
+		sc.Release();
+		pSAV.Release();
+	}
+
+	return hr;
 }
 
-bool AudioController::setSessionVolume(std::vector<SessionID_t> ids, float vol) {
+bool AudioController::setSessionVolume(std::vector<std::string> names, float vol) {
 	bool ok = true;
-	for (const auto& id : ids) {
-		ok *= AudioController::setSessionVolume(id, vol);
+	for (const auto& name : names) {
+		ok &= AudioController::setSessionVolume(name, vol);
 	}
 	return ok;
 }
@@ -220,35 +207,38 @@ bool AudioController::setMasterVolume(float vol) {
 	return S_OK == AudioController::_pEpVol->SetMasterVolumeLevelScalar(vol, NULL);
 }
 
-float AudioController::getSessionVolume(SessionID_t id) {
-	CComPtr<IAudioSessionControl> pSessionControl;
+float AudioController::getSessionVolume(std::string name) {
+	std::vector<CComPtr<IAudioSessionControl>> pSessionControl;
 	CComPtr<ISimpleAudioVolume> pSAV;
-	int sessionCount = getSessionCount();
-	float vol;
-	if (id == -1)
-		return getMasterVolume();
-	if (id >= sessionCount || id < 0) {
-		return -1;
-	}
 
 	// Get SessionControl
-	if (FAILED(AudioController::_pAudioSessionEnumerator->GetSession(id, &pSessionControl))) {
-		return -1;
-	}
-	// Ask for SimpleAudioVolume
-	if (FAILED(pSessionControl->QueryInterface(__uuidof(ISimpleAudioVolume), (VOID**)&pSAV))) {
+	if (!AudioController::_getSessionControlByName(name, pSessionControl)) {
 		return -1;
 	}
 
-	pSAV->GetMasterVolume(&vol);
+	float maxvol = -1;
+	for (auto& sc : pSessionControl) {
+		// Ask for SimpleAudioVolume
+		if (FAILED(sc->QueryInterface(__uuidof(ISimpleAudioVolume), (VOID**)&pSAV))) {
+			continue;
+		}
 
-	return vol;
+		float vol;
+		if (FAILED(pSAV->GetMasterVolume(&vol))) {
+			continue;
+		}
+		maxvol = std::max<float>(vol, maxvol);
+		sc.Release();
+		pSAV.Release();
+	}
+
+	return maxvol;
 }
 
-float AudioController::getSessionVolume(std::vector<SessionID_t> ids) {
+float AudioController::getSessionVolume(std::vector<std::string> names) {
 	float highest = 0.0;
-	for (const auto& id : ids) {
-		highest = std::max<float>(AudioController::getSessionVolume(id), highest);
+	for (const auto& name : names) {
+		highest = std::max<float>(AudioController::getSessionVolume(name), highest);
 	}
 	return highest;
 }
@@ -257,4 +247,39 @@ float AudioController::getMasterVolume() {
 	float vol;
 	AudioController::_pEpVol->GetMasterVolumeLevelScalar(&vol);
 	return vol;
+}
+
+// Dont forget to release!
+bool AudioController::_getSessionControlByName(std::string name, std::vector<CComPtr<IAudioSessionControl>> &ascs) {
+  CComPtr<IAudioSessionControl> s = NULL;
+	CComPtr<IAudioSessionControl2> s2 = NULL;
+	std::transform(name.begin(), name.end(), name.begin(), ::towlower);
+	int count = getSessionCount();
+
+	for (int i = 0; i < count; i++) {
+		if (FAILED(_pAudioSessionEnumerator->GetSession(i, &s))) {
+			continue;
+		}
+
+		if (FAILED(s->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&s2))) {
+			continue;
+		}
+
+		DWORD pid;
+		if (FAILED(s2->GetProcessId(&pid))) {
+			continue;
+		}
+
+		std::string process_name = AudioController::getPIDName(pid);
+		std::transform(process_name.begin(), process_name.end(), process_name.begin(), ::towlower);
+		if (name == process_name) {
+			ascs.emplace_back(s);
+			return true;
+		}
+		s.Release();
+		s2.Release();
+	}
+
+	ascs = {};
+  return false;
 }

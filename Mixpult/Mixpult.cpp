@@ -47,19 +47,14 @@ bool setup(std::string config_path) {
   Config_t cfg = ConfigLoader::load(config_path);
 
   // Get all sessions
-  NameIDMap_t map;
-  map = AudioController::getNameIDMap();
+  auto names = AudioController::getAllSessions();
   std::cout << "Discovered streams:\n";
-  for (const auto& line : map) {
-    std::cout << line.first << " - ";
-    for (const auto& id : line.second) {
-      std::cout << id << " ";
-    }
+  for (const auto& name : names) {
+    std::cout << name;
     std::cout << "\n";
   }
 
   // Set up controllers
-  SliderController::useMap(map);
   for (auto& slider : cfg.sliders) {
     std::vector<SliderController*> vsc;
     for (auto& app : slider) {
