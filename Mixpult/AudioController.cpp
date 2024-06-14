@@ -19,6 +19,7 @@ void AudioController::init() {
 	pDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&pSessionManager2);
 	pDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, NULL, (void**)&AudioController::_pEpVol);
 	pSessionManager2->GetSessionEnumerator(&AudioController::_pAudioSessionEnumerator);
+	pSessionManager2->RegisterSessionNotification(&AudioController::_notif_reciever);
 	pDevice.Release();
 	pDeviceEnumerator.Release();
 	pSessionManager2.Release();
