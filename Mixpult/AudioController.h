@@ -12,7 +12,10 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <queue>
+#include "MessageBoxes.h"
 #include "SessionNotificationReciever.h"
+#include "SessionEventReciever.h"
 #using <System.dll>
 
 #include <iostream>
@@ -46,12 +49,18 @@ public:
 
 private:
 	static HRESULT _onNewSession(IAudioSessionControl* ac);
+	static HRESULT _onStateChange(unsigned long id, AudioSessionState state);
+	static HRESULT _onDisconnect(unsigned long id, AudioSessionDisconnectReason reason);
 	static bool _createNewSession(CComPtr<IAudioSessionControl> asc);
+	static bool _releasseSession(unsigned long id);
 
 	struct Controls {
+		bool valid;
 		CComPtr<IAudioSessionControl> audioSessionControl;
 		CComPtr<IAudioSessionControl2> audioSessionControl2;
 		CComPtr<ISimpleAudioVolume> simpleAudioVolume;
+		SessionEventReciever* eventReciever;
+		unsigned long sessionID;
 	};
 	static std::map<std::string, std::vector<Controls>> _sessions;
 
@@ -59,4 +68,17 @@ private:
 	static CComPtr<IAudioEndpointVolume> _pEpVol;
 	static CComPtr<IAudioSessionEnumerator> _pAudioSessionEnumerator;
 	static HANDLE _hSerial;
+};
+
+class AudioID {
+public:
+	static unsigned long get();
+	static void release(unsigned long);
+
+private:
+	AudioID() = delete;
+	~AudioID() = delete;
+
+	static unsigned long _at;
+	static std::queue<unsigned long> _unused;
 };

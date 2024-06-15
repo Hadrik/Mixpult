@@ -162,6 +162,7 @@
     <ClInclude Include="OtherController.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="resource1.h" />
+    <ClInclude Include="SessionEventReciever.h" />
     <ClInclude Include="SessionNotificationReciever.h" />
     <ClInclude Include="SliderController.h" />
   </ItemGroup>

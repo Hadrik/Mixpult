@@ -35,13 +35,7 @@ void AudioController::init() {
 }
 
 void AudioController::exit() {
-	for (auto& [name, vec] : AudioController::_sessions) {
-		for (auto& cont : vec) {
-			cont.audioSessionControl.Release();
-			cont.audioSessionControl2.Release();
-			cont.simpleAudioVolume.Release();
-		}
-	}
+	AudioController::_releasseSession(0);
 	AudioController::_pAudioSessionEnumerator.Release();
 	AudioController::_pEpVol.Release();
 	CoUninitialize();
@@ -104,6 +98,7 @@ bool AudioController::setSessionMute(std::string name, bool mute) {
 
 	bool res = false;
 	for (auto& c : (*it).second) {
+		if (!c.valid) continue;
 		HRESULT r;
 		r = c.simpleAudioVolume->SetMute(mute, NULL);
 		res |= (r == S_OK);
@@ -133,6 +128,7 @@ bool AudioController::getSessionMute(std::string name) {
 
 	bool res = false;
 	for (auto& c : (*it).second) {
+		if (!c.valid) continue;
 		BOOL m;
 		c.simpleAudioVolume->GetMute(&m);
 		res |= (m == TRUE);
@@ -164,6 +160,7 @@ bool AudioController::setSessionVolume(std::string name, float vol) {
 
 	bool res = false;
 	for (auto& c : (*it).second) {
+		if (!c.valid) continue;
 		HRESULT r = c.simpleAudioVolume->SetMasterVolume(vol, NULL);
 		res |= (r == S_OK);
 	}
@@ -192,10 +189,9 @@ float AudioController::getSessionVolume(std::string name) {
 
 	float maxvol = -1;
 	for (auto& c : (*it).second) {
+		if (!c.valid) continue;
 		float vol;
-		if (FAILED(c.simpleAudioVolume->GetMasterVolume(&vol))) {
-			continue;
-		}
+		if (FAILED(c.simpleAudioVolume->GetMasterVolume(&vol))) continue;
 		maxvol = std::max<float>(vol, maxvol);
 	}
 
@@ -222,6 +218,7 @@ bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
 
 	// Set controls
 	Controls c;
+	c.eventReciever = new SessionEventReciever;
 	c.audioSessionControl = asc;
 
 	if (FAILED(asc->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&as2))) {
@@ -237,6 +234,16 @@ bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
 	}
 	c.simpleAudioVolume = sav;
 
+	if (FAILED(asc->RegisterAudioSessionNotification(c.eventReciever))) {
+		asc.Release();
+		as2.Release();
+		return false;
+	}
+	c.sessionID = AudioID::get();
+	c.eventReciever->setID(c.sessionID);
+	c.eventReciever->setStateChangeCallback(AudioController::_onStateChange);
+	c.eventReciever->setDisconnectCallback(AudioController::_onDisconnect);
+
 	// Get process name
 	DWORD pid;
 	if (FAILED(as2->GetProcessId(&pid))) {
@@ -246,6 +253,8 @@ bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
 		return false;
 	}
 	std::string name = AudioController::getPIDName(pid);
+
+	c.valid = true;
 
 	// Save
 	auto it = AudioController::_sessions.find(name);
@@ -257,9 +266,70 @@ bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
 	return true;
 }
 
+// Some sessions dont get completely released (steam works, itunes broken)
+// Event reciever is still referenced in two places (_cRefAll) idk where
+// 0 to release all
+bool AudioController::_releasseSession(unsigned long id) {
+	for (auto sit = AudioController::_sessions.begin(); sit != AudioController::_sessions.end(); sit++) {
+		auto& vec = sit->second;
+		for (auto vit = vec.begin(); vit != vec.end(); vit++) {
+			auto& c = *vit;
+			if (c.sessionID == id || id == 0) {
+				c.valid = false;
+				c.audioSessionControl->UnregisterAudioSessionNotification(c.eventReciever);
+				c.eventReciever->Release();
+				c.audioSessionControl.Release();
+				c.audioSessionControl2.Release();
+				c.simpleAudioVolume.Release();
+				AudioID::release(c.sessionID);
+				vec.erase(vit);
+				if (vec.empty()) {
+					AudioController::_sessions.erase(sit);
+				}
+				return true;
+			}
+		}
+	}
+	MESSAGE_DEBUG("Couldnt find session ID");
+	return false;
+}
+
 HRESULT AudioController::_onNewSession(IAudioSessionControl* ac) {
 	CComPtr<IAudioSessionControl> a = ac;
 	bool ok = AudioController::_createNewSession(a);
 	a.Release();
 	return ok ? S_OK : E_FAIL;
+}
+
+// TODO: FIX - dont call unregister from callback
+HRESULT AudioController::_onStateChange(unsigned long id, AudioSessionState state) {
+	if (state == AudioSessionStateExpired) {
+		AudioController::_releasseSession(id);
+	}
+	return S_OK;
+}
+
+HRESULT AudioController::_onDisconnect(unsigned long id, AudioSessionDisconnectReason reason) {
+	AudioController::_releasseSession(id);
+	return S_OK;
+}
+
+
+// -----ID-----
+
+
+unsigned long AudioID::_at = 1;
+std::queue<unsigned long> AudioID::_unused = {};
+
+unsigned long AudioID::get() {
+	if (_unused.empty()) {
+		return AudioID::_at++;
+	}
+	auto i = AudioID::_unused.front();
+	AudioID::_unused.pop();
+	return i;
+}
+
+void AudioID::release(unsigned long id) {
+	AudioID::_unused.push(id);
 }
