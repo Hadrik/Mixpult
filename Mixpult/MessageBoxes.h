@@ -20,3 +20,6 @@
   free(__b);\
   __pragma (warning(pop))\
   }
+
+#define MESSAGE_INFO(s)\
+  MessageBoxA(nullptr, s, "Mixpult", MB_ICONINFORMATION | MB_OK);

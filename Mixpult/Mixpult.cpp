@@ -4,6 +4,7 @@
 #include "MasterController.h"
 #include "OtherController.h"
 #include "ConfigLoader.h"
+#include "MessageBoxes.h"
 #include <Windows.h>
 #include <CommCtrl.h>
 #include <iostream>
@@ -13,6 +14,7 @@
 #define IDI_ICON 101
 #define WM_TRAYICON (WM_USER + 1)
 #define ID_TRAY_QUIT (WM_USER + 2)
+#define ID_TRAY_SHOW_SESSIONS (WM_USER + 3)
 #define SETVOLUME_CB_ID 0
 #define HANDLESERIAL_CB_ID 1
 
@@ -54,13 +56,22 @@ void CALLBACK handleSerial() {
   s.update();
 }
 
+void CALLBACK showSessionsPopup() {
+  auto names = AudioController::getAllSessions();
+  std::string str;
+  for (const auto& name : names) {
+    str.append(name + "\n");
+  }
+  MESSAGE_INFO(str.c_str());
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
   static HMENU hMenu;
-  NOTIFYICONDATA nid = { sizeof(NOTIFYICONDATA) };
+  static NOTIFYICONDATA nid = { sizeof(NOTIFYICONDATA) };
   switch (message) {
   case WM_TRAYICON:
     switch (lParam) {
-    case WM_LBUTTONUP:  
+    case WM_LBUTTONUP:
     case WM_RBUTTONUP:
       POINT pt;
       GetCursorPos(&pt);
@@ -73,6 +84,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     // Add the tray icon when the window is created
     hMenu = CreatePopupMenu();
     AppendMenu(hMenu, MF_STRING, ID_TRAY_QUIT, L"Quit");
+    AppendMenu(hMenu, MF_STRING, ID_TRAY_SHOW_SESSIONS, L"Show current sessions");
     nid.hWnd = hWnd;
     nid.uID = IDI_ICON;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
@@ -87,7 +99,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
   case WM_COMMAND:
     switch (LOWORD(wParam)) {
     case ID_TRAY_QUIT:
+      Shell_NotifyIcon(NIM_DELETE, &nid);
       PostQuitMessage(0);
+      break;
+    case ID_TRAY_SHOW_SESSIONS:
+      showSessionsPopup();
       break;
     }
     break;
