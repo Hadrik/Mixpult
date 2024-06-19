@@ -10,16 +10,19 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <algorithm>
 
 #define IDI_ICON 101
 #define WM_TRAYICON (WM_USER + 1)
 #define ID_TRAY_QUIT (WM_USER + 2)
 #define ID_TRAY_SHOW_SESSIONS (WM_USER + 3)
+#define ID_TRAY_OPEN_CONFIG (WM_USER + 4)
 #define SETVOLUME_CB_ID 0
 #define HANDLESERIAL_CB_ID 1
 
 std::vector<std::vector<SliderController*>> sliders;
 BasicSerial s;
+std::string config_path;
 
 void CALLBACK setVolume() {
   // Split string to vector
@@ -65,6 +68,12 @@ void CALLBACK showSessionsPopup() {
   MESSAGE_INFO(str.c_str());
 }
 
+void CALLBACK openConfig() {
+  CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+  auto r = ShellExecuteA(nullptr, nullptr, config_path.c_str(), nullptr, nullptr, SW_SHOW);
+  CoUninitialize();
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
   static HMENU hMenu;
   static NOTIFYICONDATA nid = { sizeof(NOTIFYICONDATA) };
@@ -85,6 +94,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     hMenu = CreatePopupMenu();
     AppendMenu(hMenu, MF_STRING, ID_TRAY_QUIT, L"Quit");
     AppendMenu(hMenu, MF_STRING, ID_TRAY_SHOW_SESSIONS, L"Show current sessions");
+    AppendMenu(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, L"Open config file");
     nid.hWnd = hWnd;
     nid.uID = IDI_ICON;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
@@ -105,6 +115,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     case ID_TRAY_SHOW_SESSIONS:
       showSessionsPopup();
       break;
+    case ID_TRAY_OPEN_CONFIG:
+      openConfig();
+      break;
     }
     break;
   case WM_TIMER:
@@ -118,6 +131,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     }
     break;
   case WM_DESTROY:
+    Shell_NotifyIcon(NIM_DELETE, &nid);
     PostQuitMessage(0);
     break;
   default:
@@ -157,15 +171,16 @@ HWND createWindow(HINSTANCE hInstance, int nCmdShow) {
 std::string getPath(LPSTR cmd) {
   std::istringstream iss(cmd);
   std::vector<std::string> args((std::istream_iterator<std::string>(iss)), std::istream_iterator<std::string>());
-  if (args.size() == 2) {
-    return args.at(1);
+  if (args.size() == 1) {
+    std::replace(args[0].begin(), args[0].end(), '/', '\\');
+    return args.at(0);
   }
-  return std::string("./config.json");
+  return std::string(".\\config.json");
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
   HWND hWnd = createWindow(hInstance, nCmdShow);
-  std::string config_path = getPath(lpCmdLine);
+  config_path = getPath(lpCmdLine);
 
   // Read config
   Config_t cfg = ConfigLoader::load(config_path);
