@@ -172,7 +172,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
   // Get all sessions
   AudioController::init();
-  auto names = AudioController::getAllSessions();
+  const auto names = AudioController::getAllSessions();
   std::cout << "Discovered streams:\n";
   for (const auto& name : names) {
     std::cout << name;
@@ -180,19 +180,30 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
   }
 
   // Set up controllers
-  for (auto& slider : cfg.sliders) {
+  for (const auto& slider : cfg.sliders) {
     std::vector<SliderController*> vsc;
-    for (auto& app : slider) {
-      if (app.rfind('!', 0) == 0) {
-        if (app == "!master") {
-          vsc.push_back(new MasterController());
-        } else if (app == "!other") {
-          vsc.push_back(new OtherController());
-        }
+
+    // Array?
+    if (slider.size() > 1) {
+      if (slider[0] == "!other") {
+        std::vector<std::string> c = slider;
+        c.erase(c.begin());
+        vsc.push_back(new OtherController(c));
       } else {
-        vsc.push_back(new SliderController(app));
+        for (const auto& app : slider) {
+          vsc.push_back(new SliderController(app));
+        }
+      }
+    } else {
+      if (slider[0] == "!master") {
+        vsc.push_back(new MasterController());
+      } else if (slider[0] == "!other") {
+        vsc.push_back(new OtherController());
+      } else {
+        vsc.push_back(new SliderController(slider[0]));
       }
     }
+
     sliders.push_back(vsc);
   }
 

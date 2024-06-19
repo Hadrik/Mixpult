@@ -4,10 +4,14 @@
     "mixline",
     [
       "worldoftanks",
-      "msedge"
+      "fortniteclient-win64-shipping",
+      "rainbowsix"
     ],
     "discord",
-    "!other"
+    [
+      "!other",
+      "spotify"
+    ]
   ],
 
   "port": "COM10"

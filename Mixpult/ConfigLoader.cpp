@@ -24,8 +24,8 @@ retry:
   }
 
   try {
-    auto& arr = j.at("sliders");
-    for (auto& elem : arr) {
+    const auto& arr = j.at("sliders");
+    for (const auto& elem : arr) {
       if (elem.is_string()) {
         std::string str;
         elem.get_to(str);

@@ -1,5 +1,11 @@
 #include "OtherController.h"
 
+OtherController::OtherController(const std::vector<std::string>& except) : SliderController("!other") {
+  for (const auto& e : except) {
+    SliderController::_used.insert(e);
+  }
+}
+
 bool OtherController::setVolume(float vol) {
   if (_mute) {
     setMute(false);
