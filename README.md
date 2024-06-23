@@ -11,6 +11,7 @@ Added features:
    - The button LEDs were still on even if i turned my PC off. So now when the device doesn't recieve a response to a ping it turns the lights off
 
 ## ADD:
+- [ ] Logging
 - [ ] Better smoothing of slider values
 - [ ] New icon
 - [ ] Send session events to device (muting)
@@ -21,7 +22,7 @@ Added features:
 
 ## FIX:
 - [x] Session discovery
-- [ ] Session releasing
+- [x] Session releasing (at least i think its fixed)
 
 ---
 Don't look at the code too much 😅. I've never written a Windows app and it shows.
