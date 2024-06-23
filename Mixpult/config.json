@@ -14,5 +14,6 @@
     ]
   ],
 
-  "port": "COM10"
+  "port": "COM10",
+  "log_level": "INFO"
 }

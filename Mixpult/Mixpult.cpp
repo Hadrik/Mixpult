@@ -1,3 +1,4 @@
+#include "Logger.h"
 #include "BasicSerial.h"
 #include "AudioController.h"
 #include "SliderController.h"
@@ -16,7 +17,9 @@
 #define WM_TRAYICON (WM_USER + 1)
 #define ID_TRAY_QUIT (WM_USER + 2)
 #define ID_TRAY_SHOW_SESSIONS (WM_USER + 3)
-#define ID_TRAY_OPEN_CONFIG (WM_USER + 4)
+#define ID_TRAY_REFRESH_SESSIONS (WM_USER + 4)
+#define ID_TRAY_OPEN_CONFIG (WM_USER + 5)
+#define ID_TRAY_OPEN_LOGS (WM_USER + 6)
 #define SETVOLUME_CB_ID 0
 #define HANDLESERIAL_CB_ID 1
 
@@ -68,12 +71,6 @@ void CALLBACK showSessionsPopup() {
   MESSAGE_INFO(str.c_str());
 }
 
-void CALLBACK openConfig() {
-  CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-  auto r = ShellExecuteA(nullptr, nullptr, config_path.c_str(), nullptr, nullptr, SW_SHOW);
-  CoUninitialize();
-}
-
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
   static HMENU hMenu;
   static NOTIFYICONDATA nid = { sizeof(NOTIFYICONDATA) };
@@ -92,9 +89,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
   case WM_CREATE:
     // Add the tray icon when the window is created
     hMenu = CreatePopupMenu();
-    AppendMenu(hMenu, MF_STRING, ID_TRAY_QUIT, L"Quit");
     AppendMenu(hMenu, MF_STRING, ID_TRAY_SHOW_SESSIONS, L"Show current sessions");
+    AppendMenu(hMenu, MF_STRING, ID_TRAY_REFRESH_SESSIONS, L"Refresh sessions");
     AppendMenu(hMenu, MF_STRING, ID_TRAY_OPEN_CONFIG, L"Open config file");
+    AppendMenu(hMenu, MF_STRING, ID_TRAY_OPEN_LOGS, L"Open logs");
+    AppendMenu(hMenu, MF_SEPARATOR, NULL, NULL);
+    AppendMenu(hMenu, MF_STRING, ID_TRAY_QUIT, L"Quit");
     nid.hWnd = hWnd;
     nid.uID = IDI_ICON;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
@@ -116,7 +116,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
       showSessionsPopup();
       break;
     case ID_TRAY_OPEN_CONFIG:
-      openConfig();
+      CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+      ShellExecuteA(nullptr, nullptr, config_path.c_str(), nullptr, nullptr, SW_SHOW);
+      CoUninitialize();
+      break;
+    case ID_TRAY_OPEN_LOGS:
+      CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+      ShellExecuteA(nullptr, nullptr, LOG::getPath().c_str(), nullptr, nullptr, SW_SHOW);
+      CoUninitialize();
+      break;
+    case ID_TRAY_REFRESH_SESSIONS:
+      AudioController::refresh();
       break;
     }
     break;
@@ -171,28 +181,28 @@ HWND createWindow(HINSTANCE hInstance, int nCmdShow) {
 std::string getPath(LPSTR cmd) {
   std::istringstream iss(cmd);
   std::vector<std::string> args((std::istream_iterator<std::string>(iss)), std::istream_iterator<std::string>());
-  if (args.size() == 1) {
+  if (args.size() > 0) {
     std::replace(args[0].begin(), args[0].end(), '/', '\\');
+    LOG(INFO) << "Config path set to \"" << args.at(0) << "\"";
     return args.at(0);
   }
+  LOG(WARN) << "Config path not set. Using default (\".\\config.json\")";
   return std::string(".\\config.json");
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+  LOG::setMinLevel(INFO);
+  LOG(NONE, false) << "Starting (" << LOG::getDate() << " " << LOG::getTime() << ")";
   HWND hWnd = createWindow(hInstance, nCmdShow);
   config_path = getPath(lpCmdLine);
 
   // Read config
   Config_t cfg = ConfigLoader::load(config_path);
+  LOG::setMinLevel(cfg.log_level);
 
   // Get all sessions
   AudioController::init();
-  const auto names = AudioController::getAllSessions();
-  std::cout << "Discovered streams:\n";
-  for (const auto& name : names) {
-    std::cout << name;
-    std::cout << "\n";
-  }
+  AudioController::logSessions();
 
   // Set up controllers
   for (const auto& slider : cfg.sliders) {
@@ -221,19 +231,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     sliders.push_back(vsc);
   }
+  LOG(INFO) << "Slider controllers created";
 
   // Configure serial connection
-  if (!s.open(cfg.port)) return 1;
+  if (!s.open(cfg.port)) {
+    return 1;
+  }
   s.registerCommandCallback("ping", respond);
   // Create callback timers
   SetTimer(hWnd, SETVOLUME_CB_ID, 100, NULL);
   SetTimer(hWnd, HANDLESERIAL_CB_ID, 50, NULL);
 
   // Start message loop
+  LOG(INFO) << "Going into message loop";
   MSG msg = { };
   while (GetMessage(&msg, NULL, 0, 0)) {
     TranslateMessage(&msg);
     DispatchMessage(&msg);
   }
+  LOG(NONE, false) << "Closing (" << LOG::getDate() << " " << LOG::getTime() << ")";
   return 0;
 }

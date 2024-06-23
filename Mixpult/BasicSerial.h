@@ -8,6 +8,7 @@
 #include <sstream>
 #include <functional>
 #include <algorithm>
+#include "Logger.h"
 #include "MessageBoxes.h"
 
 class BasicSerial {

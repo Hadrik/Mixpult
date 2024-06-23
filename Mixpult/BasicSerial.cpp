@@ -13,6 +13,7 @@ BasicSerial::~BasicSerial() {
 
 bool BasicSerial::open(std::string port) {
 retry:
+  LOG(INFO) << "Opening serial connection";
   const std::string start = "\\\\.\\";
   if (port.rfind(start, 0) != 0) {
     port.insert(0, start);
@@ -22,8 +23,10 @@ retry:
 
   if (_serial_handle == INVALID_HANDLE_VALUE) {
     if (GetLastError() == ERROR_FILE_NOT_FOUND) {
+      LOG(ERR) << "Serial port not found";
       MESSAGE_ERR_RETRY("Serial port not found!", retry);
     }
+    LOG(ERR) << "Cannot open serial port";
     MESSAGE_ERR_RETRY("Cannot open serial port!", retry);
   }
 
@@ -31,6 +34,7 @@ retry:
   dcb_params.DCBlength = sizeof(dcb_params);
 
   if (!GetCommState(_serial_handle, &dcb_params)) {
+    LOG(ERR) << "Cannot load DCB params";
     MESSAGE_ERR_RETRY("Serial error!", retry);
   }
 
@@ -41,15 +45,18 @@ retry:
   dcb_params.StopBits = 1;
 
   if (!GetCommState(_serial_handle, &dcb_params)) {
+    LOG(ERR) << "Cannot set DCB params";
     MESSAGE_ERR_RETRY("Error setting serial parameters!", retry);
   }
 
+  LOG(INFO) << "Serial port opened";
   return true;
 }
 
 bool BasicSerial::write(std::string data) {
   DWORD bytes_written;
   if (!WriteFile(_serial_handle, data.c_str(), strlen(data.c_str()), &bytes_written, NULL)) {
+    LOG(ERR) << "Cannot write to serial port";
     std::cerr << "Error writing to serial port!" << std::endl;
     return false;
   }

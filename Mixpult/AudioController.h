@@ -13,6 +13,7 @@
 #include <map>
 #include <set>
 #include <queue>
+#include "Logger.h"
 #include "MessageBoxes.h"
 #include "SessionNotificationReciever.h"
 #include "SessionEventReciever.h"
@@ -24,12 +25,12 @@ class AudioController {
 public:
 	static void init();
 	static void exit();
+	static void refresh();
 
 	// Names
 	static int getSessionCount();
-	static std::string getPIDName(DWORD pid);
-	static std::string getPIDTitle(DWORD pid);
 	static std::set<std::string> getAllSessions();
+	static std::string getPIDName(DWORD pid);
 
 	// Mute
 	static bool setSessionMute(std::string name, bool mute);
@@ -47,12 +48,14 @@ public:
 	static float getSessionVolume(std::vector<std::string> names);
 	static float getMasterVolume();
 
+	static void logSessions();
+
 private:
 	static HRESULT _onNewSession(IAudioSessionControl* ac);
 	static HRESULT _onStateChange(unsigned long id, AudioSessionState state);
 	static HRESULT _onDisconnect(unsigned long id, AudioSessionDisconnectReason reason);
 	static bool _createNewSession(CComPtr<IAudioSessionControl> asc);
-	static bool _releasseSession(unsigned long id);
+	static bool _releaseSession(unsigned long id);
 
 	struct Controls {
 		bool valid;
@@ -67,6 +70,7 @@ private:
 	static SessionNotificationReciever _notif_reciever;
 	static CComPtr<IAudioEndpointVolume> _pEpVol;
 	static CComPtr<IAudioSessionEnumerator> _pAudioSessionEnumerator;
+	static CComPtr<IAudioSessionManager2> _pAudioSessionManager2;
 	static HANDLE _hSerial;
 };
 

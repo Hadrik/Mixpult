@@ -5,24 +5,25 @@ using namespace System::Diagnostics;
 
 CComPtr<IAudioEndpointVolume> AudioController::_pEpVol = NULL;
 CComPtr<IAudioSessionEnumerator> AudioController::_pAudioSessionEnumerator = NULL;
+CComPtr<IAudioSessionManager2> AudioController::_pAudioSessionManager2 = NULL;
 SessionNotificationReciever AudioController::_notif_reciever(AudioController::_onNewSession);
 std::map<std::string, std::vector<AudioController::Controls>> AudioController::_sessions = {};
 
 void AudioController::init() {
+	LOG(INFO) << "Initializing AudioController";
 	CComPtr<IMMDevice> pDevice;
 	CComPtr<IMMDeviceEnumerator> pDeviceEnumerator;
-	CComPtr<IAudioSessionManager2> pSessionManager2;
+	//CComPtr<IAudioSessionManager2> pSessionManager2;
 
 	CoInitializeEx(NULL, COINIT_MULTITHREADED);
 	pDeviceEnumerator.CoCreateInstance(__uuidof(MMDeviceEnumerator));
 	pDeviceEnumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &pDevice);
-	pDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&pSessionManager2);
+	pDevice->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, NULL, (void**)&AudioController::_pAudioSessionManager2);
 	pDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, NULL, (void**)&AudioController::_pEpVol);
-	pSessionManager2->GetSessionEnumerator(&AudioController::_pAudioSessionEnumerator);
-	pSessionManager2->RegisterSessionNotification(&AudioController::_notif_reciever);
+	AudioController::_pAudioSessionManager2->GetSessionEnumerator(&AudioController::_pAudioSessionEnumerator);
+	AudioController::_pAudioSessionManager2->RegisterSessionNotification(&AudioController::_notif_reciever);
 	pDevice.Release();
 	pDeviceEnumerator.Release();
-	pSessionManager2.Release();
 
 	int sessionCount = 0;
 	AudioController::_pAudioSessionEnumerator->GetCount(&sessionCount);
@@ -32,21 +33,38 @@ void AudioController::init() {
 		AudioController::_createNewSession(s);
 		s.Release();
 	}
+	
+	LOG(INFO) << "AudioController initialization complete. Found " << sessionCount << " sessions";
 }
 
 void AudioController::exit() {
-	AudioController::_releasseSession(0);
+	LOG(INFO) << "Exiting AudioController";
+	AudioController::_releaseSession(0);
+	AudioController::_pAudioSessionManager2.Release();
 	AudioController::_pAudioSessionEnumerator.Release();
 	AudioController::_pEpVol.Release();
 	CoUninitialize();
 }
 
-int AudioController::getSessionCount() {
-	int sessionCount = 0;
+// If everything works correctly this is unnecessary
+// But thats a big if
+void AudioController::refresh() {
+	LOG(INFO) << "Refreshing AudioController";
+	AudioController::logSessions();
 	AudioController::exit();
 	AudioController::init();
-	AudioController::_pAudioSessionEnumerator->GetCount(&sessionCount);
-	return sessionCount;
+}
+
+int AudioController::getSessionCount() {
+	return AudioController::_sessions.size();
+}
+
+std::set<std::string> AudioController::getAllSessions() {
+	std::set<std::string> r;
+	for (const auto& [name, _] : AudioController::_sessions) {
+		r.insert(name);
+	}
+	return r;
 }
 
 // Lowercase
@@ -64,29 +82,6 @@ std::string AudioController::getPIDName(DWORD pid) {
 	std::string name = msclr::interop::marshal_as<std::string>(procname);
 	std::transform(name.begin(), name.end(), name.begin(), ::towlower);
 	return name;
-}
-
-std::string AudioController::getPIDTitle(DWORD pid) {
-	String^ title;
-
-	try {
-		Process^ proc = Process::GetProcessById(pid);
-		title = proc->MainWindowTitle;
-	}
-	catch (Exception^ e) {
-		e;
-		return NULL;
-	}
-	return msclr::interop::marshal_as<std::string>(title);
-}
-
-std::set<std::string> AudioController::getAllSessions() {
-	std::set<std::string> names;
-
-	for (const auto& [name, _] : AudioController::_sessions) {
-		names.insert(name);
-	}
-	return names;
 }
 
 bool AudioController::setSessionMute(std::string name, bool mute) {
@@ -212,7 +207,21 @@ float AudioController::getMasterVolume() {
 	return vol;
 }
 
+void AudioController::logSessions() {
+	LOG(INFO) << "Current sessions:";
+	for (const auto& [name, cv] : AudioController::_sessions) {
+		std::stringstream ss;
+		ss << "\t" << name << " {";
+		for (const auto& c : cv) {
+			ss << "(SID:" << c.sessionID << " valid:" << (c.valid ? "T" : "F") << ")";
+		}
+		ss << "}";
+		LOG(INFO) << ss.str();
+	}
+}
+
 bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
+	LOG(INFO) << "Creating new session";
 	CComPtr<IAudioSessionControl2> as2;
 	CComPtr<ISimpleAudioVolume> sav;
 
@@ -222,12 +231,14 @@ bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
 	c.audioSessionControl = asc;
 
 	if (FAILED(asc->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&as2))) {
+		LOG(ERR) << "Cannot get IAudioSessionControl2";
 		asc.Release();
 		return false;
 	}
 	c.audioSessionControl2 = as2;
 
 	if (FAILED(asc->QueryInterface(__uuidof(ISimpleAudioVolume), (void**)&sav))) {
+		LOG(ERR) << "Cannot get ISimpleAudioVolume";
 		asc.Release();
 		as2.Release();
 		return false;
@@ -235,6 +246,7 @@ bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
 	c.simpleAudioVolume = sav;
 
 	if (FAILED(asc->RegisterAudioSessionNotification(c.eventReciever))) {
+		LOG(ERR) << "Cannot register session notification callback";
 		asc.Release();
 		as2.Release();
 		return false;
@@ -247,6 +259,7 @@ bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
 	// Get process name
 	DWORD pid;
 	if (FAILED(as2->GetProcessId(&pid))) {
+		LOG(ERR) << "Cannot get process id";
 		asc.Release();
 		as2.Release();
 		sav.Release();
@@ -263,13 +276,16 @@ bool AudioController::_createNewSession(CComPtr<IAudioSessionControl> asc) {
 	} else {
 		(*it).second.push_back(c);
 	}
+
+	LOG(INFO) << "Session created - ID: " << c.sessionID << " Name: " << name;
 	return true;
 }
 
 // Some sessions dont get completely released (steam works, itunes broken)
 // Event reciever is still referenced in two places (_cRefAll) idk where
 // 0 to release all
-bool AudioController::_releasseSession(unsigned long id) {
+bool AudioController::_releaseSession(unsigned long id) {
+	LOG(INFO) << "Releasing session - ID: " << id;
 	for (auto sit = AudioController::_sessions.begin(); sit != AudioController::_sessions.end(); sit++) {
 		auto& vec = sit->second;
 		for (auto vit = vec.begin(); vit != vec.end(); vit++) {
@@ -285,11 +301,13 @@ bool AudioController::_releasseSession(unsigned long id) {
 				vec.erase(vit);
 				if (vec.empty()) {
 					AudioController::_sessions.erase(sit);
+					LOG(INFO) << "Session found and released";
 				}
 				return true;
 			}
 		}
 	}
+	LOG(WARN) << "Session not found";
 	MESSAGE_DEBUG("Couldnt find session ID");
 	return false;
 }
@@ -303,14 +321,25 @@ HRESULT AudioController::_onNewSession(IAudioSessionControl* ac) {
 
 // TODO: FIX - dont call unregister from callback
 HRESULT AudioController::_onStateChange(unsigned long id, AudioSessionState state) {
+	LOG(INFO) << "Session state changed - ID: " << id << " State: " << state;
+	if (state == AudioSessionStateInactive) return S_OK;
+
+	//for (auto& [name, sv] : AudioController::_sessions) {
+	//	for (auto& s : sv) {
+	//		if (s.sessionID == id) {
+	//			s.valid = (state == AudioSessionStateExpired ? false : true);
+	//		}
+	//	}
+	//}
 	if (state == AudioSessionStateExpired) {
-		AudioController::_releasseSession(id);
+		AudioController::_releaseSession(id);
 	}
 	return S_OK;
 }
 
 HRESULT AudioController::_onDisconnect(unsigned long id, AudioSessionDisconnectReason reason) {
-	AudioController::_releasseSession(id);
+	LOG(INFO) << "Session disconnected - ID: " << id << " Reason: " << reason;
+	AudioController::_releaseSession(id);
 	return S_OK;
 }
 

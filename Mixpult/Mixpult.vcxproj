@@ -148,6 +148,7 @@
     <ClCompile Include="AudioController.cpp" />
     <ClCompile Include="BasicSerial.cpp" />
     <ClCompile Include="ConfigLoader.cpp" />
+    <ClCompile Include="Logger.cpp" />
     <ClCompile Include="MasterController.cpp" />
     <ClCompile Include="Mixpult.cpp" />
     <ClCompile Include="OtherController.cpp" />
@@ -157,6 +158,7 @@
     <ClInclude Include="AudioController.h" />
     <ClInclude Include="BasicSerial.h" />
     <ClInclude Include="ConfigLoader.h" />
+    <ClInclude Include="Logger.h" />
     <ClInclude Include="MasterController.h" />
     <ClInclude Include="MessageBoxes.h" />
     <ClInclude Include="OtherController.h" />

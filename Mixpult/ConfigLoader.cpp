@@ -4,8 +4,10 @@ using json = nlohmann::json;
 
 Config_t ConfigLoader::load(std::string path) {
 retry:
+  LOG(INFO) << "Loading config";
   std::ifstream f(path);
   if (!f) {
+    LOG(ERR) << "Config file not found (" << path << ")";
     std::string err = "Cannot find configuration file!\n";
     err.append(path);
     MESSAGE_ERR_RETRY(err.c_str(), retry);
@@ -14,6 +16,7 @@ retry:
   json j;
   if (ConfigLoader::_endsWith(path, "json")) {
     // regular json
+    LOG(INFO) << "Using JSON";
     try {
       j = json::parse(f);
     } catch (json::parse_error& e) {
@@ -25,6 +28,7 @@ retry:
     }
   } else if (ConfigLoader::_endsWith(path, "jsonc")) {
     // json with comments
+    LOG(INFO) << "Using JSONC";
     try {
       j = json::parse(f, nullptr, true, true);
     } catch (json::parse_error& e) {
@@ -33,15 +37,24 @@ retry:
       MESSAGE_ERR_RETRY(err.c_str(), retry);
     }
   } else {
+    LOG(ERR) << "Config file isnt JSON or JSONC (" << path << ")";
     MESSAGE_ERR_RETRY("Bad configuration file extension!\nAllowed only json or jsonc", retry);
   }
 
-  
+
 
   Config_t c;
   try {
+    j.at("log_level").get_to(c.log_level);
+  } catch (...) {
+    LOG(WARN) << "Cannot find \"log_level\" in config file, using default (INFO)";
+    c.log_level = "INFO";
+  }
+
+  try {
     j.at("port").get_to(c.port);
   } catch (...) {
+    LOG(ERR) << "Config file doesnt contain \"port\"";
     MESSAGE_ERR_RETRY("Configuration file bad \"port\" option!", retry);
   }
 
@@ -64,9 +77,11 @@ retry:
     }
   }
   catch (...) {
+    LOG(ERR) << "Config file doesnt contain\"sliders\"";
     MESSAGE_ERR_RETRY("Configuration file bad \"sliders\" option!", retry);
   }
 
+  LOG(INFO) << "Config loaded";
   return c;
 }
 
