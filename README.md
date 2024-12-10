@@ -1,4 +1,4 @@
-# Mixpult
+# Mixpult - abandoned!
 ## [deej](https://github.com/omriharel/deej) app for Windows rewritten in C++ with some extra stuff
 **VERY** lightweight. Uses around 5MB of RAM and 0.1% CPU (Ryzen 5 5500)
 
@@ -15,14 +15,12 @@ Added features:
 - [ ] Better smoothing of slider values
 - [ ] New icon
 - [ ] Send session events to device (muting)
-- [ ] Suppont for buttons with more functions (spotify track skipping)
+- [ ] Support for buttons with more functions (spotify track skipping)
 - [ ] Ability to change button color over serial
 - [ ] Code cleanup
 - [ ] Maybe support for motorized sliders
 
 ## FIX:
 - [x] Session discovery
-- [x] Session releasing (at least i think its fixed)
+- [x] Session releasing (at least i think its fixed (it wasnt))
 
----
-This is hell. I should've just learned go and modified the original app.
